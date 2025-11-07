@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Headers, Ip, Post } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import {
   GuardianConsentDto,
@@ -16,18 +16,18 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('signup')
-  signup(@Body() payload: SignupDto) {
-    return this.authService.signup(payload);
+  signup(@Body() payload: SignupDto, @Headers('user-agent') userAgent?: string, @Ip() ipAddress?: string) {
+    return this.authService.signup(payload, this.buildMetadata(userAgent, ipAddress));
   }
 
   @Post('login')
-  login(@Body() payload: LoginDto) {
-    return this.authService.login(payload);
+  login(@Body() payload: LoginDto, @Headers('user-agent') userAgent?: string, @Ip() ipAddress?: string) {
+    return this.authService.login(payload, this.buildMetadata(userAgent, ipAddress));
   }
 
   @Post('refresh')
-  refresh(@Body() payload: RefreshTokenDto) {
-    return this.authService.refresh(payload);
+  refresh(@Body() payload: RefreshTokenDto, @Headers('user-agent') userAgent?: string, @Ip() ipAddress?: string) {
+    return this.authService.refresh(payload, this.buildMetadata(userAgent, ipAddress));
   }
 
   @Post('logout')
@@ -53,5 +53,9 @@ export class AuthController {
   @Post('guardian-consent')
   guardianConsent(@Body() payload: GuardianConsentDto) {
     return this.authService.guardianConsent(payload);
+  }
+
+  private buildMetadata(userAgent?: string, ipAddress?: string) {
+    return { userAgent, ipAddress };
   }
 }
