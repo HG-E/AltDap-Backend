@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { User, UserRole as PrismaUserRole, ConsentStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { createHash, randomBytes } from 'crypto';
-import { sign } from 'jsonwebtoken';
+import { sign, type SignOptions } from 'jsonwebtoken';
 import ms from 'ms';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import {
@@ -172,13 +172,10 @@ export class AuthService {
       throw new Error('JWT access secret not configured');
     }
 
-    return sign(
-      { sub: user.id, role: user.role, email: user.email },
-      secret,
-      {
-        expiresIn: this.configService.get<string>('app.jwt.accessExpiresIn') ?? '15m',
-      },
-    );
+    const expiresIn = (this.configService.get<string>('app.jwt.accessExpiresIn') ?? '15m') as ms.StringValue;
+    const options: SignOptions = { expiresIn };
+
+    return sign({ sub: user.id, role: user.role, email: user.email }, secret, options);
   }
 
   private generateRefreshToken(): string {
@@ -201,7 +198,7 @@ export class AuthService {
   }
 
   private durationMs(ttl: string): number {
-    const duration = ms(ttl);
+    const duration = ms(ttl as ms.StringValue);
     if (typeof duration !== 'number') {
       throw new Error(`Invalid duration string: ${ttl}`);
     }
