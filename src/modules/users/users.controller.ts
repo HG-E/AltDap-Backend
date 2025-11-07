@@ -1,34 +1,44 @@
-import { Body, Controller, Get, Headers, Param, Post, Put, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, UnauthorizedException } from '@nestjs/common';
 import { UpdateProfileDto, UpdateSettingsDto, UploadAvatarDto } from './dto/users.dto';
 import { UsersService } from './users.service';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { AuthenticatedUser } from '../auth/interfaces/authenticated-user.interface';
 
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get('me')
-  getMe(@Headers('x-user-id') userId?: string) {
-    return this.usersService.getMe(this.assertUserId(userId));
+  getMe(@CurrentUser() user?: AuthenticatedUser) {
+    const currentUser = this.requireUser(user);
+    return this.usersService.getMe(currentUser.id);
   }
 
   @Put('me')
-  updateMe(@Headers('x-user-id') userId: string | undefined, @Body() payload: UpdateProfileDto) {
-    return this.usersService.updateMe(this.assertUserId(userId), payload);
+  updateMe(@CurrentUser() user: AuthenticatedUser | undefined, @Body() payload: UpdateProfileDto) {
+    const currentUser = this.requireUser(user);
+    return this.usersService.updateMe(currentUser.id, payload);
   }
 
   @Post('me/avatar')
-  uploadAvatar(@Headers('x-user-id') userId: string | undefined, @Body() payload: UploadAvatarDto) {
-    return this.usersService.requestAvatarUpload(this.assertUserId(userId), payload);
+  uploadAvatar(@CurrentUser() user: AuthenticatedUser | undefined, @Body() payload: UploadAvatarDto) {
+    const currentUser = this.requireUser(user);
+    return this.usersService.requestAvatarUpload(currentUser.id, payload);
   }
 
   @Get('me/settings')
-  getSettings(@Headers('x-user-id') userId: string | undefined) {
-    return this.usersService.getSettings(this.assertUserId(userId));
+  getSettings(@CurrentUser() user: AuthenticatedUser | undefined) {
+    const currentUser = this.requireUser(user);
+    return this.usersService.getSettings(currentUser.id);
   }
 
   @Put('me/settings')
-  updateSettings(@Headers('x-user-id') userId: string | undefined, @Body() payload: UpdateSettingsDto) {
-    return this.usersService.updateSettings(this.assertUserId(userId), payload);
+  updateSettings(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+    @Body() payload: UpdateSettingsDto,
+  ) {
+    const currentUser = this.requireUser(user);
+    return this.usersService.updateSettings(currentUser.id, payload);
   }
 
   @Get(':id')
@@ -36,10 +46,10 @@ export class UsersController {
     return this.usersService.getPublicProfile(id);
   }
 
-  private assertUserId(userId?: string) {
-    if (!userId) {
-      throw new UnauthorizedException('Missing x-user-id header');
+  private requireUser(user?: AuthenticatedUser) {
+    if (!user) {
+      throw new UnauthorizedException('Authentication required');
     }
-    return userId;
+    return user;
   }
 }

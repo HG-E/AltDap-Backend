@@ -93,8 +93,12 @@ export class CoursesService {
     };
   }
 
-  async updateModuleProgress(courseId: string, moduleId: string, payload: UpdateModuleProgressDto) {
-    const userId = await this.resolveDefaultUserId();
+  async updateModuleProgress(
+    userId: string,
+    courseId: string,
+    moduleId: string,
+    payload: UpdateModuleProgressDto,
+  ) {
 
     const course = await this.prisma.course.findUnique({
       where: { id: courseId },
@@ -141,8 +145,7 @@ export class CoursesService {
     };
   }
 
-  async completeCourse(courseId: string, payload: CompleteCourseDto) {
-    const userId = await this.resolveDefaultUserId();
+  async completeCourse(userId: string, courseId: string, payload: CompleteCourseDto) {
 
     const course = await this.prisma.course.findUnique({
       where: { id: courseId },
@@ -184,8 +187,7 @@ export class CoursesService {
     };
   }
 
-  async getProgress(courseId: string) {
-    const userId = await this.resolveDefaultUserId();
+  async getProgress(userId: string, courseId: string) {
 
     const course = await this.prisma.course.findUnique({
       where: { id: courseId },
@@ -249,14 +251,6 @@ export class CoursesService {
       return tags.map(String);
     }
     return [];
-  }
-
-  private async resolveDefaultUserId(): Promise<string> {
-    const user = await this.prisma.user.findFirst({ select: { id: true } });
-    if (!user) {
-      throw new NotFoundException('No users available to associate course progress');
-    }
-    return user.id;
   }
 
   private async ensureProgressRecord(userId: string, courseId: string) {

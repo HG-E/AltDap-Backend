@@ -2,6 +2,8 @@ import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { MentorsService } from './mentors.service';
 import { PaginationQueryDto } from '../../shared/dto/pagination-query.dto';
 import { CreateMentorDto } from './dto/mentors.dto';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '@prisma/client';
 
 @Controller('mentors')
 export class MentorsController {
@@ -13,6 +15,7 @@ export class MentorsController {
   }
 
   @Post()
+  @Roles(UserRole.ADMIN)
   create(@Body() payload: CreateMentorDto) {
     return this.mentorsService.createMentor(payload);
   }

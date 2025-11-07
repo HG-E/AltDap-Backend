@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { MarkNotificationsReadDto, SubscribeDeviceDto } from './dto/notifications.dto';
 
@@ -6,8 +6,7 @@ import { MarkNotificationsReadDto, SubscribeDeviceDto } from './dto/notification
 export class NotificationsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getNotifications() {
-    const userId = await this.resolveDefaultUserId();
+  async getNotifications(userId: string) {
     const notifications = await this.prisma.notification.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
@@ -23,8 +22,7 @@ export class NotificationsService {
     }));
   }
 
-  async markRead(payload: MarkNotificationsReadDto) {
-    const userId = await this.resolveDefaultUserId();
+  async markRead(userId: string, payload: MarkNotificationsReadDto) {
     const readAt = new Date();
 
     await this.prisma.notification.updateMany({
@@ -35,9 +33,7 @@ export class NotificationsService {
     return { ids: payload.ids, readAt: readAt.toISOString() };
   }
 
-  async subscribe(payload: SubscribeDeviceDto) {
-    const userId = await this.resolveDefaultUserId();
-
+  async subscribe(userId: string, payload: SubscribeDeviceDto) {
     const subscription = await this.prisma.pushSubscription.upsert({
       where: { userId_deviceId: { userId, deviceId: payload.deviceId } },
       update: {
@@ -62,17 +58,9 @@ export class NotificationsService {
     };
   }
 
-  async unsubscribe(deviceId: string) {
-    const userId = await this.resolveDefaultUserId();
+  async unsubscribe(userId: string, deviceId: string) {
     await this.prisma.pushSubscription.deleteMany({ where: { userId, deviceId } });
     return { deviceId, status: 'removed' };
   }
 
-  private async resolveDefaultUserId() {
-    const user = await this.prisma.user.findFirst({ select: { id: true } });
-    if (!user) {
-      throw new NotFoundException('No users available for notifications');
-    }
-    return user.id;
-  }
 }

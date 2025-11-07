@@ -19,9 +19,7 @@ export class SupportService {
     }));
   }
 
-  async createTicket(payload: CreateSupportTicketDto) {
-    const userId = await this.resolveDefaultUserId();
-
+  async createTicket(userId: string, payload: CreateSupportTicketDto) {
     const ticket = await this.prisma.supportTicket.create({
       data: {
         userId,
@@ -92,9 +90,7 @@ export class SupportService {
     };
   }
 
-  async addMessage(ticketId: string, payload: CreateSupportMessageDto) {
-    const userId = await this.resolveDefaultUserId();
-
+  async addMessage(userId: string, ticketId: string, payload: CreateSupportMessageDto) {
     const message = await this.prisma.supportMessage.create({
       data: {
         ticketId,
@@ -113,11 +109,4 @@ export class SupportService {
     };
   }
 
-  private async resolveDefaultUserId() {
-    const user = await this.prisma.user.findFirst({ select: { id: true } });
-    if (!user) {
-      throw new NotFoundException('No users available for support actions');
-    }
-    return user.id;
-  }
 }

@@ -111,14 +111,14 @@ export class MentorsService {
     };
   }
 
-  async createBooking(mentorId: string, payload: CreateBookingDto) {
+  async createBooking(mentorId: string, userId: string, payload: CreateBookingDto) {
     await this.ensureMentorExists(mentorId);
-    await this.ensureUserExists(payload.userId);
+    await this.ensureUserExists(userId);
 
     const booking = await this.prisma.booking.create({
       data: {
         mentorId,
-        userId: payload.userId,
+        userId,
         scheduledStart: new Date(payload.scheduledStart),
         scheduledEnd: new Date(payload.scheduledEnd),
         guardianNotified: Boolean(payload.guardianEmail),

@@ -6,8 +6,7 @@ import { CompleteChallengeDto, ProtectStreakDto, UnlockBadgeDto } from './dto/en
 export class EngagementService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getStreak() {
-    const userId = await this.resolveDefaultUserId();
+  async getStreak(userId: string) {
     const streak = await this.prisma.streak.upsert({
       where: { userId },
       update: {},
@@ -22,8 +21,7 @@ export class EngagementService {
     };
   }
 
-  async protectStreak(payload: ProtectStreakDto) {
-    const userId = await this.resolveDefaultUserId();
+  async protectStreak(userId: string, payload: ProtectStreakDto) {
     const streak = await this.prisma.streak.upsert({
       where: { userId },
       update: {},
@@ -76,7 +74,7 @@ export class EngagementService {
     return { daily, weekly };
   }
 
-  async completeChallenge(challengeId: string, payload: CompleteChallengeDto) {
+  async completeChallenge(userId: string, challengeId: string, payload: CompleteChallengeDto) {
     const challenge = await this.prisma.challenge.findUnique({
       where: { id: challengeId },
       select: { id: true, rewardPoints: true },
@@ -85,8 +83,6 @@ export class EngagementService {
     if (!challenge) {
       throw new NotFoundException('Challenge not found');
     }
-
-    const userId = await this.resolveDefaultUserId();
 
     const completion = await this.prisma.challengeCompletion.upsert({
       where: { userId_challengeId: { userId, challengeId } },
@@ -102,9 +98,7 @@ export class EngagementService {
     };
   }
 
-  async listBadges() {
-    const userId = await this.resolveDefaultUserId();
-
+  async listBadges(userId: string) {
     const [badges, earned] = await this.prisma.$transaction([
       this.prisma.badge.findMany({ orderBy: { name: 'asc' } }),
       this.prisma.userBadge.findMany({
@@ -133,13 +127,12 @@ export class EngagementService {
     };
   }
 
-  async unlockBadge(badgeId: string, payload: UnlockBadgeDto) {
+  async unlockBadge(userId: string, badgeId: string, payload: UnlockBadgeDto) {
     const badge = await this.prisma.badge.findUnique({ where: { id: badgeId } });
     if (!badge) {
       throw new NotFoundException('Badge not found');
     }
 
-    const userId = await this.resolveDefaultUserId();
     const userBadge = await this.prisma.userBadge.upsert({
       where: { userId_badgeId: { userId, badgeId } },
       update: { earnedAt: new Date() },
@@ -154,11 +147,4 @@ export class EngagementService {
     };
   }
 
-  private async resolveDefaultUserId() {
-    const user = await this.prisma.user.findFirst({ select: { id: true } });
-    if (!user) {
-      throw new NotFoundException('No users available for engagement actions');
-    }
-    return user.id;
-  }
 }

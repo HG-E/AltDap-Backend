@@ -20,9 +20,6 @@ export class CreateMentorDto {
 
 export class CreateBookingDto {
   @IsString()
-  userId!: string;
-
-  @IsString()
   scheduledStart!: string;
 
   @IsString()

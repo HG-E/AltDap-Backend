@@ -26,9 +26,8 @@ export class AssessmentsService {
     };
   }
 
-  async submitResponses(payload: SubmitAssessmentDto) {
+  async submitResponses(userId: string, payload: SubmitAssessmentDto) {
     await this.ensureVersionExists(payload.versionId);
-    const userId = await this.resolveDefaultUserId();
 
     const recommendations = await this.buildRecommendations(payload.tags ?? []);
 
@@ -136,11 +135,4 @@ export class AssessmentsService {
     return tags.map((tag) => String(tag));
   }
 
-  private async resolveDefaultUserId() {
-    const user = await this.prisma.user.findFirst({ select: { id: true } });
-    if (!user) {
-      throw new NotFoundException('No user available to store assessment response');
-    }
-    return user.id;
-  }
 }

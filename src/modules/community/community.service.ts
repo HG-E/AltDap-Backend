@@ -57,9 +57,7 @@ export class CommunityService {
     return paginate(items, total, { ...query, page, limit });
   }
 
-  async createPost(payload: CreatePostDto) {
-    const authorId = await this.resolveDefaultUserId();
-
+  async createPost(authorId: string, payload: CreatePostDto) {
     const post = await this.prisma.post.create({
       data: {
         authorId,
@@ -127,8 +125,7 @@ export class CommunityService {
     return { postId, status: 'deleted' };
   }
 
-  async react(postId: string, payload: CreateReactionDto) {
-    const userId = await this.resolveDefaultUserId();
+  async react(userId: string, postId: string, payload: CreateReactionDto) {
     const reactionType = this.mapReactionType(payload.type);
 
     const reaction = await this.prisma.reaction.upsert({
@@ -148,8 +145,7 @@ export class CommunityService {
     };
   }
 
-  async report(postId: string, payload: ReportPostDto) {
-    const reporterId = await this.resolveDefaultUserId();
+  async report(reporterId: string, postId: string, payload: ReportPostDto) {
     const report = await this.prisma.report.create({
       data: {
         reporterId,
@@ -184,9 +180,7 @@ export class CommunityService {
     }));
   }
 
-  async createComment(postId: string, payload: CreateCommentDto) {
-    const userId = await this.resolveDefaultUserId();
-
+  async createComment(userId: string, postId: string, payload: CreateCommentDto) {
     const comment = await this.prisma.comment.create({
       data: {
         postId,
@@ -242,11 +236,4 @@ export class CommunityService {
     return mapping[type];
   }
 
-  private async resolveDefaultUserId() {
-    const user = await this.prisma.user.findFirst({ select: { id: true } });
-    if (!user) {
-      throw new NotFoundException('No users available for community actions');
-    }
-    return user.id;
-  }
 }

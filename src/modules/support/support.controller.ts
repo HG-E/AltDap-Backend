@@ -1,6 +1,8 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UnauthorizedException } from '@nestjs/common';
 import { SupportService } from './support.service';
 import { CreateSupportMessageDto, CreateSupportTicketDto } from './dto/support.dto';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { AuthenticatedUser } from '../auth/interfaces/authenticated-user.interface';
 
 @Controller('support')
 export class SupportController {
@@ -12,8 +14,8 @@ export class SupportController {
   }
 
   @Post('tickets')
-  createTicket(@Body() payload: CreateSupportTicketDto) {
-    return this.supportService.createTicket(payload);
+  createTicket(@Body() payload: CreateSupportTicketDto, @CurrentUser() user: AuthenticatedUser | undefined) {
+    return this.supportService.createTicket(this.requireUser(user).id, payload);
   }
 
   @Get('tickets/:ticketId')
@@ -22,7 +24,18 @@ export class SupportController {
   }
 
   @Post('tickets/:ticketId/messages')
-  addMessage(@Param('ticketId') ticketId: string, @Body() payload: CreateSupportMessageDto) {
-    return this.supportService.addMessage(ticketId, payload);
+  addMessage(
+    @Param('ticketId') ticketId: string,
+    @Body() payload: CreateSupportMessageDto,
+    @CurrentUser() user: AuthenticatedUser | undefined,
+  ) {
+    return this.supportService.addMessage(this.requireUser(user).id, ticketId, payload);
+  }
+
+  private requireUser(user?: AuthenticatedUser) {
+    if (!user) {
+      throw new UnauthorizedException('Authentication required');
+    }
+    return user;
   }
 }
