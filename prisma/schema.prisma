@@ -1,0 +1,384 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  TEEN
+  GUARDIAN
+  MENTOR
+  ADMIN
+}
+
+enum ConsentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ModuleType {
+  VIDEO
+  READING
+  QUIZ
+  ACTIVITY
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+enum ReactionType {
+  LIKE
+  SUPPORT
+  CELEBRATE
+}
+
+enum TargetType {
+  POST
+  COMMENT
+  USER
+}
+
+enum OrganizationType {
+  REHABILITATION
+  MENTAL_HEALTH
+  SUPPORT_GROUP
+  HOSPITAL
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model User {
+  id                     String           @id @default(cuid())
+  email                  String           @unique
+  passwordHash           String
+  role                   UserRole         @default(TEEN)
+  firstName              String
+  lastName               String
+  pronouns               String?
+  avatarUrl              String?
+  bio                    String?
+  guardianEmail          String?
+  guardianConsentStatus  ConsentStatus    @default(PENDING)
+  guardianConsent        GuardianConsent?
+  settings               Json?
+  sessions               Session[]
+  assessmentResponses    AssessmentResponse[]
+  courseProgress         CourseProgress[]
+  userBadges             UserBadge[]
+  challengeCompletions   ChallengeCompletion[]
+  streak                 Streak?
+  mentorProfile          Mentor?
+  bookings               Booking[]        @relation("BookingUser")
+  posts                  Post[]
+  reactions              Reaction[]
+  comments               Comment[]
+  reports                Report[]         @relation("Reporter")
+  supportTickets         SupportTicket[]
+  supportMessages        SupportMessage[]
+  notifications          Notification[]
+  pushSubscriptions      PushSubscription[]
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+}
+
+model GuardianConsent {
+  id             String         @id @default(cuid())
+  userId         String         @unique
+  user           User           @relation(fields: [userId], references: [id])
+  guardianName   String
+  guardianEmail  String
+  status         ConsentStatus  @default(PENDING)
+  signedAt       DateTime?
+}
+
+model Session {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id])
+  refreshTokenHash String
+  userAgent        String?
+  ipAddress        String?
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
+}
+
+model AssessmentVersion {
+  id        String @id @default(cuid())
+  version   Int    @unique
+  questions Json
+  isActive  Boolean @default(false)
+  responses AssessmentResponse[]
+  createdAt DateTime @default(now())
+}
+
+model AssessmentResponse {
+  id             String             @id @default(cuid())
+  userId         String
+  user           User               @relation(fields: [userId], references: [id])
+  versionId      String
+  version        AssessmentVersion  @relation(fields: [versionId], references: [id])
+  answers        Json
+  recommendations Json
+  createdAt      DateTime @default(now())
+}
+
+model Course {
+  id           String    @id @default(cuid())
+  title        String
+  description  String
+  category     String
+  difficulty   String
+  points       Int       @default(0)
+  heroImageUrl String?
+  tags         Json
+  modules      Module[]
+  progress     CourseProgress[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Module {
+  id          String     @id @default(cuid())
+  courseId    String
+  course      Course     @relation(fields: [courseId], references: [id])
+  title       String
+  type        ModuleType
+  contentUrl  String?
+  orderIndex  Int
+  metadata    Json?
+}
+
+model CourseProgress {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+  courseId       String
+  course         Course   @relation(fields: [courseId], references: [id])
+  moduleStatus   Json
+  progressPercent Int      @default(0)
+  completedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  @@unique([userId, courseId])
+}
+
+model Badge {
+  id          String      @id @default(cuid())
+  code        String      @unique
+  name        String
+  description String
+  icon        String?
+  criteria    Json
+  userBadges  UserBadge[]
+}
+
+model UserBadge {
+  id       String   @id @default(cuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id])
+  badgeId  String
+  badge    Badge    @relation(fields: [badgeId], references: [id])
+  earnedAt DateTime @default(now())
+  @@unique([userId, badgeId])
+}
+
+model Challenge {
+  id            String  @id @default(cuid())
+  title         String
+  description   String
+  type          String
+  rewardPoints  Int     @default(0)
+  expiresAt     DateTime?
+  completions   ChallengeCompletion[]
+}
+
+model ChallengeCompletion {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  challengeId String
+  challenge   Challenge @relation(fields: [challengeId], references: [id])
+  completedAt DateTime  @default(now())
+  @@unique([userId, challengeId])
+}
+
+model Streak {
+  id              String  @id @default(cuid())
+  userId          String  @unique
+  user            User    @relation(fields: [userId], references: [id])
+  currentValue    Int     @default(0)
+  longestValue    Int     @default(0)
+  lastActiveDate  DateTime?
+  shieldsRemaining Int    @default(0)
+}
+
+model Mentor {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  user               User     @relation(fields: [userId], references: [id])
+  bio                String
+  specialties        Json
+  rating             Float    @default(0)
+  sessionsCompleted  Int      @default(0)
+  availability       MentorAvailability[]
+  bookings           Booking[]
+}
+
+model MentorAvailability {
+  id         String   @id @default(cuid())
+  mentorId   String
+  mentor     Mentor   @relation(fields: [mentorId], references: [id])
+  startTime  DateTime
+  endTime    DateTime
+  isRecurring Boolean @default(false)
+}
+
+model Booking {
+  id             String        @id @default(cuid())
+  mentorId       String
+  mentor         Mentor        @relation(fields: [mentorId], references: [id])
+  userId         String
+  user           User          @relation("BookingUser", fields: [userId], references: [id])
+  status         BookingStatus @default(PENDING)
+  scheduledStart DateTime
+  scheduledEnd   DateTime
+  channel        String?
+  guardianNotified Boolean    @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model Organization {
+  id        String           @id @default(cuid())
+  name      String
+  type      OrganizationType
+  location  String?
+  phone     String?
+  email     String?
+  services  Json
+  imageUrl  String?
+}
+
+model Post {
+  id                String    @id @default(cuid())
+  authorId          String
+  author            User      @relation(fields: [authorId], references: [id])
+  content           String
+  mediaUrls         Json
+  visibility        String?
+  moderationStatus  String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  reactions         Reaction[]
+  comments          Comment[]
+}
+
+model Reaction {
+  id        String       @id @default(cuid())
+  postId    String
+  post      Post         @relation(fields: [postId], references: [id])
+  userId    String
+  user      User         @relation(fields: [userId], references: [id])
+  type      ReactionType
+  createdAt DateTime     @default(now())
+  @@unique([postId, userId, type])
+}
+
+model Comment {
+  id              String    @id @default(cuid())
+  postId          String
+  post            Post      @relation(fields: [postId], references: [id])
+  authorId        String
+  author          User      @relation(fields: [authorId], references: [id])
+  content         String
+  parentCommentId String?
+  parentComment   Comment?  @relation("CommentReplies", fields: [parentCommentId], references: [id])
+  replies         Comment[] @relation("CommentReplies")
+  createdAt       DateTime  @default(now())
+}
+
+model Report {
+  id          String     @id @default(cuid())
+  reporterId  String
+  reporter    User       @relation("Reporter", fields: [reporterId], references: [id])
+  targetType  TargetType
+  targetId    String
+  reason      String
+  status      String?
+  createdAt   DateTime @default(now())
+}
+
+model EmergencyResource {
+  id             String  @id @default(cuid())
+  region         String
+  label          String
+  phone          String?
+  sms            String?
+  website        String?
+  availableHours String?
+}
+
+model SupportTicket {
+  id          String        @id @default(cuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id])
+  category    String
+  status      TicketStatus  @default(OPEN)
+  priority    TicketPriority @default(MEDIUM)
+  assignedTo  String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  messages    SupportMessage[]
+}
+
+model SupportMessage {
+  id        String   @id @default(cuid())
+  ticketId  String
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id])
+  senderId  String
+  sender    User     @relation(fields: [senderId], references: [id])
+  message   String
+  attachments Json?
+  createdAt DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  type      String
+  payload   Json
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  deviceId  String
+  platform  String
+  token     String
+  locale    String?
+  createdAt DateTime @default(now())
+  @@unique([userId, deviceId])
+}
