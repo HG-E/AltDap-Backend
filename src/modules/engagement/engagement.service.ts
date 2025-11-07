@@ -1,56 +1,164 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../../core/prisma/prisma.service';
 import { CompleteChallengeDto, ProtectStreakDto, UnlockBadgeDto } from './dto/engagement.dto';
 
 @Injectable()
 export class EngagementService {
-  getStreak() {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async getStreak() {
+    const userId = await this.resolveDefaultUserId();
+    const streak = await this.prisma.streak.upsert({
+      where: { userId },
+      update: {},
+      create: { userId },
+    });
+
     return {
-      currentValue: 14,
-      longestValue: 45,
-      shieldsRemaining: 1,
-      lastActiveDate: new Date().toISOString(),
+      currentValue: streak.currentValue,
+      longestValue: streak.longestValue,
+      shieldsRemaining: streak.shieldsRemaining,
+      lastActiveDate: streak.lastActiveDate ? streak.lastActiveDate.toISOString() : null,
     };
   }
 
-  protectStreak(payload: ProtectStreakDto) {
+  async protectStreak(payload: ProtectStreakDto) {
+    const userId = await this.resolveDefaultUserId();
+    const streak = await this.prisma.streak.upsert({
+      where: { userId },
+      update: {},
+      create: { userId },
+    });
+
+    if (streak.shieldsRemaining <= 0) {
+      throw new BadRequestException('No streak shields remaining');
+    }
+
+    const updated = await this.prisma.streak.update({
+      where: { userId },
+      data: {
+        shieldsRemaining: streak.shieldsRemaining - 1,
+        lastActiveDate: new Date(),
+      },
+    });
+
     return {
       status: 'protected',
       shieldId: payload.shieldId,
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      shieldsRemaining: updated.shieldsRemaining,
     };
   }
 
-  getDailyChallenges() {
-    return {
-      daily: [
-        { id: 'challenge_daily_gratitude', title: 'Gratitude log', rewardPoints: 25 },
-        { id: 'challenge_move', title: '10 minute walk', rewardPoints: 15 },
-      ],
-      weekly: [{ id: 'challenge_volunteer', title: 'Volunteer outreach', rewardPoints: 100 }],
-    };
+  async getDailyChallenges() {
+    const challenges = await this.prisma.challenge.findMany({
+      orderBy: { rewardPoints: 'desc' },
+    });
+
+    const daily = [] as Array<Record<string, unknown>>;
+    const weekly = [] as Array<Record<string, unknown>>;
+
+    for (const challenge of challenges) {
+      const entry = {
+        id: challenge.id,
+        title: challenge.title,
+        rewardPoints: challenge.rewardPoints,
+        expiresAt: challenge.expiresAt ? challenge.expiresAt.toISOString() : null,
+      };
+      const type = challenge.type.toLowerCase();
+      if (type === 'daily') {
+        daily.push(entry);
+      } else if (type === 'weekly') {
+        weekly.push(entry);
+      }
+    }
+
+    return { daily, weekly };
   }
 
-  completeChallenge(challengeId: string, payload: CompleteChallengeDto) {
+  async completeChallenge(challengeId: string, payload: CompleteChallengeDto) {
+    const challenge = await this.prisma.challenge.findUnique({
+      where: { id: challengeId },
+      select: { id: true, rewardPoints: true },
+    });
+
+    if (!challenge) {
+      throw new NotFoundException('Challenge not found');
+    }
+
+    const userId = await this.resolveDefaultUserId();
+
+    const completion = await this.prisma.challengeCompletion.upsert({
+      where: { userId_challengeId: { userId, challengeId } },
+      update: { completedAt: new Date() },
+      create: { userId, challengeId },
+    });
+
     return {
       challengeId,
-      completedAt: new Date().toISOString(),
-      rewardPoints: 25,
-      reflection: payload.reflection,
+      completedAt: completion.completedAt.toISOString(),
+      rewardPoints: challenge.rewardPoints,
+      reflection: payload.reflection ?? null,
     };
   }
 
-  listBadges() {
+  async listBadges() {
+    const userId = await this.resolveDefaultUserId();
+
+    const [badges, earned] = await this.prisma.$transaction([
+      this.prisma.badge.findMany({ orderBy: { name: 'asc' } }),
+      this.prisma.userBadge.findMany({
+        where: { userId },
+        include: { badge: true },
+      }),
+    ]);
+
+    const earnedSet = new Set(earned.map((entry) => entry.badgeId));
+
+    const earnedBadges = earned.map((entry) => ({
+      id: entry.badge.id,
+      code: entry.badge.code,
+      name: entry.badge.name,
+      icon: entry.badge.icon,
+      earnedAt: entry.earnedAt.toISOString(),
+    }));
+
+    const lockedBadges = badges
+      .filter((badge) => !earnedSet.has(badge.id))
+      .map((badge) => ({ id: badge.id, code: badge.code, name: badge.name, icon: badge.icon }));
+
     return {
-      earned: [{ id: 'badge_first_step', name: 'First Step', earnedAt: '2024-10-01' }],
-      locked: [{ id: 'badge_mentor', name: 'Mentor Match' }],
+      earned: earnedBadges,
+      locked: lockedBadges,
     };
   }
 
-  unlockBadge(badgeId: string, payload: UnlockBadgeDto) {
+  async unlockBadge(badgeId: string, payload: UnlockBadgeDto) {
+    const badge = await this.prisma.badge.findUnique({ where: { id: badgeId } });
+    if (!badge) {
+      throw new NotFoundException('Badge not found');
+    }
+
+    const userId = await this.resolveDefaultUserId();
+    const userBadge = await this.prisma.userBadge.upsert({
+      where: { userId_badgeId: { userId, badgeId } },
+      update: { earnedAt: new Date() },
+      create: { userId, badgeId },
+    });
+
     return {
       badgeId,
       status: 'unlocked',
       source: payload.source ?? 'system',
+      earnedAt: userBadge.earnedAt.toISOString(),
     };
+  }
+
+  private async resolveDefaultUserId() {
+    const user = await this.prisma.user.findFirst({ select: { id: true } });
+    if (!user) {
+      throw new NotFoundException('No users available for engagement actions');
+    }
+    return user.id;
   }
 }
