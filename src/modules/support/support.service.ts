@@ -1,40 +1,123 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../../core/prisma/prisma.service';
 import { CreateSupportMessageDto, CreateSupportTicketDto } from './dto/support.dto';
 
 @Injectable()
 export class SupportService {
-  getEmergencyResources() {
-    return [
-      { id: 'hotline_us', region: 'US', label: '988 Suicide & Crisis Lifeline', phone: '988' },
-      { id: 'hotline_uk', region: 'UK', label: 'Samaritans', phone: '116 123' },
-    ];
+  constructor(private readonly prisma: PrismaService) {}
+
+  async getEmergencyResources() {
+    const resources = await this.prisma.emergencyResource.findMany({ orderBy: { region: 'asc' } });
+    return resources.map((resource) => ({
+      id: resource.id,
+      region: resource.region,
+      label: resource.label,
+      phone: resource.phone,
+      sms: resource.sms,
+      website: resource.website,
+      availableHours: resource.availableHours,
+    }));
   }
 
-  createTicket(payload: CreateSupportTicketDto) {
+  async createTicket(payload: CreateSupportTicketDto) {
+    const userId = await this.resolveDefaultUserId();
+
+    const ticket = await this.prisma.supportTicket.create({
+      data: {
+        userId,
+        category: payload.category,
+        messages: payload.description
+          ? {
+              create: {
+                senderId: userId,
+                message: payload.description,
+              },
+            }
+          : undefined,
+      },
+      include: {
+        messages: {
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+
     return {
-      ticketId: `ticket_${Date.now()}`,
-      category: payload.category,
-      description: payload.description,
-      status: 'open',
+      ticketId: ticket.id,
+      status: ticket.status.toLowerCase(),
+      category: ticket.category,
+      createdAt: ticket.createdAt.toISOString(),
+      messages: ticket.messages.map((message) => ({
+        id: message.id,
+        message: message.message,
+        attachments: message.attachments,
+        sentAt: message.createdAt.toISOString(),
+      })),
     };
   }
 
-  getTicket(ticketId: string) {
+  async getTicket(ticketId: string) {
+    const ticket = await this.prisma.supportTicket.findUnique({
+      where: { id: ticketId },
+      include: {
+        messages: {
+          orderBy: { createdAt: 'asc' },
+          include: { sender: { select: { id: true, firstName: true, lastName: true } } },
+        },
+      },
+    });
+
+    if (!ticket) {
+      throw new NotFoundException('Support ticket not found');
+    }
+
     return {
-      ticketId,
-      category: 'general',
-      status: 'open',
-      history: [],
+      ticketId: ticket.id,
+      category: ticket.category,
+      status: ticket.status.toLowerCase(),
+      priority: ticket.priority.toLowerCase(),
+      history: ticket.messages.map((message) => ({
+        id: message.id,
+        sender: {
+          id: message.sender.id,
+          firstName: message.sender.firstName,
+          lastName: message.sender.lastName,
+        },
+        message: message.message,
+        attachments: message.attachments,
+        sentAt: message.createdAt.toISOString(),
+      })),
+      createdAt: ticket.createdAt.toISOString(),
+      updatedAt: ticket.updatedAt.toISOString(),
     };
   }
 
-  addMessage(ticketId: string, payload: CreateSupportMessageDto) {
+  async addMessage(ticketId: string, payload: CreateSupportMessageDto) {
+    const userId = await this.resolveDefaultUserId();
+
+    const message = await this.prisma.supportMessage.create({
+      data: {
+        ticketId,
+        senderId: userId,
+        message: payload.message,
+        attachments: payload.attachment ? [payload.attachment] : undefined,
+      },
+    });
+
     return {
       ticketId,
-      messageId: `msg_${Date.now()}`,
-      message: payload.message,
+      messageId: message.id,
+      message: message.message,
       attachment: payload.attachment ?? null,
-      sentAt: new Date().toISOString(),
+      sentAt: message.createdAt.toISOString(),
     };
+  }
+
+  private async resolveDefaultUserId() {
+    const user = await this.prisma.user.findFirst({ select: { id: true } });
+    if (!user) {
+      throw new NotFoundException('No users available for support actions');
+    }
+    return user.id;
   }
 }
