@@ -1,4 +1,4 @@
-import { IsEmail, IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
+import { ArrayNotEmpty, IsArray, IsEmail, IsEnum, IsInt, IsOptional, IsString, MinLength } from 'class-validator';
 
 export enum UserRole {
   Teen = 'teen',
@@ -27,6 +27,20 @@ export class SignupDto {
   @IsOptional()
   @IsString()
   guardianEmail?: string;
+
+  @IsOptional()
+  @IsInt()
+  age?: number;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsString({ each: true })
+  interests?: string[];
+
+  @IsOptional()
+  @IsString()
+  avatar?: string;
 }
 
 export class LoginDto {

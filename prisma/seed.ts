@@ -6,6 +6,7 @@ const PASSWORD_SALT_ROUNDS = 11;
 
 async function main() {
   const users = await seedUsers();
+  await seedAssessments(users);
   await seedCourses();
   await seedMentors(users);
   await seedOrganizations();
@@ -91,6 +92,126 @@ async function seedUsers(): Promise<SeededUsers> {
     mentorOne: { id: mentorTaylor.id },
     mentorTwo: { id: mentorJordan.id },
   };
+}
+
+async function seedAssessments(users: SeededUsers) {
+  const assessmentVersions = [
+    {
+      version: 1,
+      isActive: true,
+      questions: [
+        {
+          id: 'stress-level',
+          prompt: 'How often have you felt overwhelmed in the past two weeks?',
+          type: 'scale-1-5',
+          labels: ['Never', 'Rarely', 'Sometimes', 'Often', 'Almost Daily'],
+        },
+        {
+          id: 'coping-tools',
+          prompt: 'Which coping tools do you rely on most?',
+          type: 'multi-select',
+          options: ['Breathing exercises', 'Talking to someone', 'Journaling', 'Physical activity', 'Other'],
+        },
+        {
+          id: 'support-system',
+          prompt: 'Who do you reach out to when you need support?',
+          type: 'single-select',
+          options: ['Parent/Guardian', 'Mentor', 'Friend', 'Counselor', 'I usually handle it alone'],
+        },
+        {
+          id: 'wind-down-routine',
+          prompt: 'Describe any routines that help you wind down before bed.',
+          type: 'open-ended',
+        },
+        {
+          id: 'screen-time-check',
+          prompt: 'Do you spend more than four hours on a screen after school most days?',
+          type: 'boolean',
+          labels: ['No, usually less than four hours', 'Yes, more than four hours'],
+        },
+      ],
+    },
+    {
+      version: 2,
+      isActive: false,
+      questions: [
+        {
+          id: 'sleep-patterns',
+          prompt: 'How would you rate your sleep over the past week?',
+          type: 'scale-1-5',
+          labels: ['Very Poor', 'Poor', 'Average', 'Good', 'Excellent'],
+        },
+        {
+          id: 'motivation',
+          prompt: 'What keeps you motivated when things get hard?',
+          type: 'open-ended',
+        },
+      ],
+    },
+  ];
+
+  const versionRecords = [];
+  for (const definition of assessmentVersions) {
+    const record = await prisma.assessmentVersion.upsert({
+      where: { version: definition.version },
+      update: {
+        questions: definition.questions as Prisma.JsonArray,
+        isActive: definition.isActive,
+      },
+      create: {
+        version: definition.version,
+        questions: definition.questions as Prisma.JsonArray,
+        isActive: definition.isActive,
+      },
+    });
+    versionRecords.push({ definition, record });
+  }
+
+  const activeVersion = versionRecords.find((entry) => entry.definition.isActive)?.record;
+  if (!activeVersion) {
+    return;
+  }
+
+  await prisma.assessmentResponse.upsert({
+    where: { id: 'assessment-response-alex-rivera' },
+    update: {
+      userId: users.teen.id,
+      versionId: activeVersion.id,
+      answers: [
+        { questionId: 'stress-level', value: 3 },
+        { questionId: 'coping-tools', value: ['Breathing exercises', 'Journaling'] },
+        { questionId: 'support-system', value: 'Mentor' },
+        { questionId: 'wind-down-routine', value: 'I journal for 10 minutes and stretch before bed.' },
+        { questionId: 'screen-time-check', value: true },
+      ] as Prisma.JsonArray,
+      recommendations: {
+        highlights: ['You already rely on breathing exercises and journaling - keep it up!'],
+        nextSteps: [
+          'Try adding a short grounding routine before bed to lower evening stress.',
+          'Reach out to a mentor or trusted adult twice this week to expand your support circle.',
+        ],
+      } as Prisma.JsonObject,
+    },
+    create: {
+      id: 'assessment-response-alex-rivera',
+      userId: users.teen.id,
+      versionId: activeVersion.id,
+      answers: [
+        { questionId: 'stress-level', value: 3 },
+        { questionId: 'coping-tools', value: ['Breathing exercises', 'Journaling'] },
+        { questionId: 'support-system', value: 'Mentor' },
+        { questionId: 'wind-down-routine', value: 'I journal for 10 minutes and stretch before bed.' },
+        { questionId: 'screen-time-check', value: true },
+      ] as Prisma.JsonArray,
+      recommendations: {
+        highlights: ['You already rely on breathing exercises and journaling - keep it up!'],
+        nextSteps: [
+          'Try adding a short grounding routine before bed to lower evening stress.',
+          'Reach out to a mentor or trusted adult twice this week to expand your support circle.',
+        ],
+      } as Prisma.JsonObject,
+    },
+  });
 }
 
 async function seedCourses() {

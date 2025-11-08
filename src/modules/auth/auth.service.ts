@@ -54,6 +54,9 @@ export class AuthService {
         firstName: payload.firstName,
         lastName: payload.lastName,
         guardianEmail: payload.guardianEmail,
+        age: payload.age,
+        interests: payload.interests ?? undefined,
+        avatar: payload.avatar,
       },
     });
 
@@ -139,6 +142,9 @@ export class AuthService {
       role: user.role,
       firstName: user.firstName,
       lastName: user.lastName,
+      age: user.age,
+      interests: user.interests,
+      avatar: user.avatar,
       avatarUrl: user.avatarUrl,
     };
   }
